@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Voter Signup / Login</title>
+<style>
+  body {
+    background-image: url('images1/indianflag.jpg');
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    margin: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    font-family: Arial, sans-serif;
+  }
+  .card {
+    background: rgba(255,255,255,0.9);
+    padding: 20px;
+    border-radius: 10px;
+    box-shadow: 0 0 15px rgba(0,0,0,0.2);
+    max-width: 400px;
+    width: 100%;
+    text-align: center;
+  }
+  input, select {
+    width:95%; padding:10px; margin:8px 0;
+    border-radius:5px; border:1px solid #ccc;
+  }
+  button {
+    padding:10px; background:#007BFF; color:white;
+    border:none; border-radius:5px; cursor:pointer;
+    width:100%; margin-top:10px;
+  }
+  button:hover { background:#0056b3; }
+  table { width:100%; border-collapse:collapse; margin-top:10px; }
+  th,td { text-align:left; padding:8px; border-bottom:1px solid #ddd; }
+  th { background:#f0f0f0; width:35%; }
+  img { width:150px; height:150px; border-radius:8px; object-fit:cover; margin:10px auto; display:block; border:1px solid #ccc; }
+</style>
+</head>
+<body>
+
+<div class="card" id="signupCard">
+  <h2>Voter Signup</h2>
+  <input id="signupVoterID" placeholder="Voter ID">
+  <input id="signupEmail" placeholder="Email">
+  <input id="signupPassword" type="password" placeholder="Password">
+
+  <label>Are you PWD?
+    <select id="signupPWD" onchange="toggleDisability()">
+      <option value="no">No</option>
+      <option value="yes">Yes</option>
+    </select>
+  </label>
+
+  <div id="disabilityDiv" style="display:none; margin-top:10px;">
+    <label>Select Disability Type:
+      <select id="signupDisability">
+        <option value="">--Select--</option>
+        <option value="Leprosy">Leprosy</option>
+        <option value="Locomotor Disability">Locomotor Disability</option>
+        <option value="Intellectual Disability">Intellectual Disability</option>
+        <option value="Mental Illness">Mental Illness</option>
+        <option value="Autism Spectrum Disorder">Autism Spectrum Disorder</option>
+        <option value="Cerebral Palsy">Cerebral Palsy</option>
+        <option value="Chronic Neurological Condition">Chronic Neurological Condition</option>
+      </select>
+    </label>
+  </div>
+
+  <div id="medicalDiv" style="display:none; margin-top:10px;">
+    <label>Upload Medical Certificate (PDF/JPG/PNG):</label>
+    <input type="file" id="medicalCertificate" accept=".pdf,.jpg,.jpeg,.png">
+  </div>
+
+  <button id="signupBtn">Sign Up</button>
+  <p>Already registered? <a href="#" onclick="showLogin()">Login</a></p>
+</div>
+
+<div class="card" id="loginCard" style="display:none;">
+  <h2>Voter Login</h2>
+  <input id="loginEmail" placeholder="Email">
+  <input id="loginPassword" type="password" placeholder="Password">
+  <button id="loginBtn">Login</button>
+  <p>New voter? <a href="#" onclick="showSignup()">Sign Up</a></p>
+</div>
+
+<div class="card" id="voterCard" style="display:none;">
+  <h2>Your Voter Information</h2>
+  <img id="voterPhoto" src="images/default.jpg" alt="Voter Photo">
+  <table id="voterTable"></table>
+  <button onclick="logout()">Logout</button>
+</div>
+
+<!-- Firebase SDK -->
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyARC0sOozRd1K6ygk_XLtiqikJsHE6mXcg",
+    authDomain: "smartevm-1cec6.firebaseapp.com",
+    projectId: "smartevm-1cec6"
+  };
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
+
+  const signupCard = document.getElementById('signupCard');
+  const loginCard = document.getElementById('loginCard');
+  const voterCard = document.getElementById('voterCard');
+  const voterTable = document.getElementById('voterTable');
+  const voterPhoto = document.getElementById('voterPhoto');
+
+  function showLogin() {
+    signupCard.style.display='none';
+    loginCard.style.display='block';
+    voterCard.style.display='none';
+  }
+  function showSignup() {
+    loginCard.style.display='none';
+    signupCard.style.display='block';
+    voterCard.style.display='none';
+  }
+  function toggleDisability() {
+    const pwdVal = document.getElementById('signupPWD').value;
+    document.getElementById('disabilityDiv').style.display = (pwdVal === 'yes') ? 'block' : 'none';
+    document.getElementById('medicalDiv').style.display = (pwdVal === 'yes') ? 'block' : 'none';
+  }
+
+  // Convert file to Base64
+  function toBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = (error) => reject(error);
+    });
+  }
+
+  // Signup
+  document.getElementById('signupBtn').addEventListener('click', async () => {
+    const voterID = document.getElementById('signupVoterID').value.trim();
+    const email = document.getElementById('signupEmail').value.trim();
+    const password = document.getElementById('signupPassword').value;
+    const pwdStatus = document.getElementById('signupPWD').value;
+    const disabilityType = (pwdStatus === 'yes') ? document.getElementById('signupDisability').value : '';
+    const fileInput = document.getElementById('medicalCertificate');
+    let fileBase64 = "";
+
+    if (pwdStatus === 'yes' && fileInput.files.length > 0) {
+      fileBase64 = await toBase64(fileInput.files[0]);
+    }
+
+    if(!voterID || !email || !password) { alert("Fill all fields"); return; }
+    if(pwdStatus === 'yes' && !disabilityType) { alert("Select disability type"); return; }
+
+    const voterDoc = await db.collection("voters").doc(voterID).get();
+    if(!voterDoc.exists) { alert("Invalid Voter ID"); return; }
+
+    try {
+      await auth.createUserWithEmailAndPassword(email, password);
+      await db.collection("voters").doc(voterID).update({
+        voterEmail: email,
+        pwdStatus: pwdStatus,
+        disabilityType: disabilityType,
+        medicalCertificate: fileBase64
+      });
+      alert("Signup successful! Please login.");
+      showLogin();
+    } catch(err) {
+      alert("Error: "+err.message);
+    }
+  });
+
+  // Login
+  document.getElementById('loginBtn').addEventListener('click', async () => {
+    const email = document.getElementById('loginEmail').value.trim();
+    const password = document.getElementById('loginPassword').value;
+    try {
+      await auth.signInWithEmailAndPassword(email, password);
+      loadVoterData(email);
+    } catch(err) {
+      alert("Login failed: "+err.message);
+    }
+  });
+
+  // Load voter info
+  async function loadVoterData(email) {
+    signupCard.style.display='none';
+    loginCard.style.display='none';
+    voterCard.style.display='block';
+
+    const q = await db.collection("voters").where("voterEmail","==",email).get();
+    if(q.empty) {
+      voterTable.innerHTML="<tr><td>No voter record found</td></tr>";
+      voterPhoto.src = "images/default.jpg";
+      return;
+    }
+
+    const docSnap = q.docs[0];
+    const data = docSnap.data();
+    const voterID = docSnap.id;
+
+    voterPhoto.src = `images/${voterID}.jpg`;
+    voterPhoto.onerror = () => { voterPhoto.src = "images/default.jpg"; };
+
+    let rows = `
+      <tr><th>Name</th><td>${data.name || 'N/A'}</td></tr>
+      <tr><th>Father</th><td>${data.fathername || 'N/A'}</td></tr>
+      <tr><th>DOB</th><td>${data.dob || 'N/A'}</td></tr>
+      <tr><th>Mobile</th><td>${data.mobilenumber || 'N/A'}</td></tr>
+      <tr><th>Sex</th><td>${data.sex || 'N/A'}</td></tr>
+      <tr><th>Voter ID</th><td>${voterID}</td></tr>
+      <tr><th>PWD Status</th><td>${data.pwdStatus || 'No'}</td></tr>
+      <tr><th>Disability</th><td>${data.disabilityType || 'N/A'}</td></tr>
+    `;
+
+    // Show certificate
+    if (data.medicalCertificate) {
+      if (data.medicalCertificate.startsWith("data:image")) {
+        rows += `<tr><th>Medical Certificate</th><td><img src="${data.medicalCertificate}" style="max-width:200px;"></td></tr>`;
+      } else if (data.medicalCertificate.startsWith("data:application/pdf")) {
+        rows += `<tr><th>Medical Certificate</th><td><a href="${data.medicalCertificate}" target="_blank">View PDF</a></td></tr>`;
+      }
+    }
+
+    voterTable.innerHTML = rows;
+  }
+
+  function logout() {
+    auth.signOut();
+    voterCard.style.display='none';
+    loginCard.style.display='block';
+  }
+
+  auth.onAuthStateChanged(user => {
+    if(user) loadVoterData(user.email);
+    else showLogin();
+  });
+</script>
+</body>
+</html>
